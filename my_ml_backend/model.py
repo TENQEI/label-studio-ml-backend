@@ -11,7 +11,7 @@ from label_studio_ml.response import ModelResponse
 
 from gpr_bbox_predict_20250109 import MyInference, predict_image
 
-model_path = getenv("MODEL_PATH", "model-20250109")
+model_path = getenv("MODEL_DIR", "model-20250109")
 
 inference_instance = MyInference(model_path)
 
