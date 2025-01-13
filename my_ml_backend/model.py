@@ -1,6 +1,39 @@
+from io import BytesIO
+from os import getenv
 from typing import List, Dict, Optional
+
+import numpy as np
+import requests
+from PIL import Image
+
 from label_studio_ml.model import LabelStudioMLBase
 from label_studio_ml.response import ModelResponse
+
+from gpr_bbox_predict_20250109 import MyInference, predict_image
+
+model_path = getenv("MODEL_PATH", "model-20250109")
+
+inference_instance = MyInference(model_path)
+
+
+def get_image_from_url(url):
+    # 发送GET请求获取图片
+    response = requests.get(url)
+
+    # 检查请求是否成功
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch image from URL: {url}")
+
+    # 将响应内容转换为字节流
+    image_bytes = BytesIO(response.content)
+
+    # 使用PIL打开图片
+    image = Image.open(image_bytes)
+
+    # 将图片转换为NumPy数组
+    image_array = np.array(image)
+
+    return image_array
 
 
 class NewModel(LabelStudioMLBase):
@@ -32,6 +65,8 @@ class NewModel(LabelStudioMLBase):
         # you need to set env vars LABEL_STUDIO_URL and LABEL_STUDIO_API_KEY
         # path = self.get_local_path(tasks[0]['data']['image_url'], task_id=tasks[0]['id'])
 
+        data = get_image_from_url(tasks[0]['data']['image'])
+        result = predict_image(inference_instance, data)
         # example for simple classification
         # return [{
         #     "model_version": self.get("model_version"),
