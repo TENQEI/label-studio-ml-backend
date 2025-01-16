@@ -5,6 +5,7 @@ from typing import List, Dict, Optional
 import numpy as np
 import requests
 from PIL import Image
+from label_studio_sdk.label_interface.objects import PredictionValue
 
 from label_studio_ml.model import LabelStudioMLBase
 from label_studio_ml.response import ModelResponse
@@ -43,7 +44,7 @@ class NewModel(LabelStudioMLBase):
     def setup(self):
         """Configure any parameters of your model here
         """
-        self.set("model_version", "0.0.1")
+        self.set("model_version", model_path)
 
     def predict(self, tasks: List[Dict], context: Optional[Dict] = None, **kwargs) -> ModelResponse:
         """ Write your inference logic here
@@ -53,20 +54,45 @@ class NewModel(LabelStudioMLBase):
                 ModelResponse(predictions=predictions) with
                 predictions: [Predictions array in JSON format](https://labelstud.io/guide/export.html#Label-Studio-JSON-format-of-annotated-tasks)
         """
-        print(f'''\
-        Run prediction on {tasks}
-        Received context: {context}
-        Project ID: {self.project_id}
-        Label config: {self.label_config}
-        Parsed JSON Label config: {self.parsed_label_config}
-        Extra params: {self.extra_params}''')
+        # print(f'''\
+        # Run prediction on {tasks}
+        # Received context: {context}
+        # Project ID: {self.project_id}
+        # Label config: {self.label_config}
+        # Parsed JSON Label config: {self.parsed_label_config}
+        # Extra params: {self.extra_params}''')
 
         # example for resource downloading from Label Studio instance,
         # you need to set env vars LABEL_STUDIO_URL and LABEL_STUDIO_API_KEY
         # path = self.get_local_path(tasks[0]['data']['image_url'], task_id=tasks[0]['id'])
 
-        data = get_image_from_url(tasks[0]['data']['image'])
-        result = predict_image(inference_instance, data)
+        predictions = []
+
+        for task in tasks:
+            data = get_image_from_url(task['data']['image'])
+            result = predict_image(inference_instance, data[..., :3])
+            predictions.append(PredictionValue(**{
+                "model_version": "main_classification",
+                "score": result['main_classification']['confidence'],
+                "result": [
+                    {
+                        "from_name": "label",
+                        "to_name": "image",
+                        "id": task['id'],
+                        "source": task['data']['image'],
+                        "type": "rectanglelabels",
+                        "value": {
+                            "rectanglelabels": [result['main_classification']['predicted_label']],
+                            "rotation": 0,
+                            "width": (result['bbox'][2] - result['bbox'][0]) * 100,
+                            "height": (result['bbox'][3] - result['bbox'][1]) * 100,
+                            "x": result['bbox'][0] * 100,
+                            "y": result['bbox'][1] * 100
+                        }
+                    }
+                ]
+            }))
+
         # example for simple classification
         # return [{
         #     "model_version": self.get("model_version"),
@@ -82,7 +108,7 @@ class NewModel(LabelStudioMLBase):
         #     }]
         # }]
         
-        return ModelResponse(predictions=[])
+        return ModelResponse(model_version=self.model_version, predictions=predictions)
     
     def fit(self, event, data, **kwargs):
         """
@@ -107,4 +133,3 @@ class NewModel(LabelStudioMLBase):
         print(f'New model version: {self.get("model_version")}')
 
         print('fit() completed successfully.')
-
